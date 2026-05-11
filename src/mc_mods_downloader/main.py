@@ -270,7 +270,7 @@ def main_menu(
                 "checked": mod["value"] in initial_modlist,
             }
             for mod in mods_in_category
-            if current_config["mod_loader"] in mod["loaders"]
+            if current_config["mod_loader"].lower() in mod["loaders"]
         ]
 
         selection = questionary.checkbox(

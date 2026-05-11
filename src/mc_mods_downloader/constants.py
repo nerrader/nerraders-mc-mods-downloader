@@ -8,7 +8,9 @@ from rich.theme import Theme
 from rich.console import Console
 
 # rich module things
-CUSTOM_THEME = Theme({"error": "bold red", "success": "green", "warning": "yellow"})
+CUSTOM_THEME = Theme(
+    {"error": "bold red", "success": "green", "warning": "yellow", "info": "blue"}
+)
 CONSOLE = Console(theme=CUSTOM_THEME, highlight=False)
 
 # APPDATA_FILEPATH is where program stores json files
