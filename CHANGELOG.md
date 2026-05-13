@@ -1,3 +1,11 @@
+# v3.2.0 - 5-13-2026
+- Added a feature that filters the mods that are incompatible with your launcher in the main selection mods screen.
+- Added Multi-OS Compatibility, this tool now allows Linux, MacOS and other OSes to download mods as well. However, the smart pathfind system only works on Windows so other OSes have to manually type in their filepaths to download mods.
+- Added a new module to help with the development of this tool: `platformdirs`
+- Added dependabot to help resolve project dependency security vulnerabilities.
+- Removed the max_workers during download, allowing for further concurrency.
+- Updated README information to go along with the latest changes in this version
+- Fixed some minor bugs present in older versions
 # v3.1.1 - 04-05-2026
 - Polished the mc-mods-downloader.exe icon
 # v3.1.0 - 04-05-2026
