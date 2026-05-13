@@ -700,10 +700,10 @@ def download_mods(
                 f"downloading {target_mod.get('slug')}",
                 total=mod_filesize,
             )
+
+            # idk what tf this does but it works according to google so
             with open(download_path, "wb") as file:
-                for chunk in response.iter_content(
-                    chunk_size=const.CHUNK_SIZE
-                ):  # idk what tf this does but it works according to google so
+                for chunk in response.iter_content(chunk_size=const.CHUNK_SIZE):
                     file.write(chunk)
                     mod_download_progress.update(
                         mod_downloading_progress_id, advance=len(chunk)
