@@ -6,6 +6,7 @@ import questionary
 import requests
 
 from mc_mods_downloader import constants as const, storage
+from mc_mods_downloader.utils.prompt_user_for_directory import prompt_user_for_directory
 
 print = const.CONSOLE.print
 
@@ -131,23 +132,8 @@ def _select_valid_versions(config: Config) -> list[str]:
 
 
 def _change_default_path(config: Config) -> Path | None:
-    print(
-        "Note that changing this setting will remove the pathing prompt when downloading",
-        style="warning",
-    )
-    print(
-        "Tip: You can copy and paste the path from the file explorer search bar",
-        style="warning",
-    )
-    selected_folder_path: str = questionary.path(
-        "Change Default Mods Path: (press tab)",
-        default=str(config.mods_directory) if config.mods_directory else "",
-        style=const.QUESTIONARY_STYLE,
-    ).ask()
-    return (
-        Path(selected_folder_path)
-        if not selected_folder_path or selected_folder_path == "None"
-        else None
+    return prompt_user_for_directory(
+        mods_directory=config.mods_directory or const.HOME_FILEPATH
     )
 
 

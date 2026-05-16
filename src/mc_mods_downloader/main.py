@@ -1,7 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
-from sys import exit
+from sys import exit as sysexit
 from typing import Any
 
 import questionary
@@ -18,8 +18,8 @@ from rich.progress import (
 )
 from rich.table import Table
 
-# builder for tool initialization, creating required appdata folders and stuff like that
 from mc_mods_downloader import builder, config, constants as const
+from mc_mods_downloader.utils.prompt_user_for_directory import prompt_user_for_directory
 
 # overriding default print with rich print
 print = const.CONSOLE.print
@@ -84,7 +84,7 @@ def main_menu(
                 initial_modlist = []
                 continue
             case "cancel":
-                exit(0)
+                sysexit(0)
 
         mods_in_category: list[dict[str, str]] = json_modlist_data[category_map_value]
 
@@ -329,13 +329,21 @@ def _get_modpack_folder(launcher_path: Path) -> Path:
 
     modpack_choice = questionary.select(
         "Which modpack do you want your mods to be downloaded in?",
-        choices=directories + [questionary.Separator(), "Create New Modpack Folder"],
+        choices=directories
+        + [questionary.Separator(), "Create New Modpack Folder", "Enter Manual Path"],
         style=const.QUESTIONARY_STYLE,
     ).ask()
-    if modpack_choice != "Create New Modpack Folder":
-        return launcher_path / modpack_choice / "mods"
-    modpack_name = questionary.text("What should the name of the new modpack be?").ask()
-    return launcher_path / modpack_name / "mods"
+
+    if modpack_choice == "Create New Modpack Folder":
+        modpack_name = questionary.text(
+            "What should the name of the new modpack be?"
+        ).ask()
+        return launcher_path / modpack_name / "mods"
+
+    elif modpack_choice == "Enter Manual Path":
+        return enter_manual_path("Please enter the path for the new modpack folder:")
+
+    return launcher_path / modpack_choice / "mods"
 
 
 def get_download_folder_path(download_context: DownloadContext) -> Path:
@@ -361,26 +369,11 @@ def enter_manual_path(
 
     This function also exits out of the program if no path is provided.
     """
-    print(
-        "Tip: You can copy and paste the path from the file explorer search bar",
-        style="info",
-    )
-    while True:
-        folder_path_str: str = questionary.path(
-            prompt,
-            style=const.QUESTIONARY_STYLE,
-        ).ask()
-        if folder_path_str is None or folder_path_str.lower() in ("exit", "quit", "q"):
-            exit("Error: No folder path provided.")
-
-        folder_path = Path(folder_path_str)
-
-        if folder_path.exists() and folder_path.is_dir():
-            return folder_path
-
-        print(
-            "Folder path does not exist or is not a directory. Try again", style="error"
-        )
+    user_directory = prompt_user_for_directory(prompt=prompt)
+    if not user_directory:
+        print("No path provided, exiting program.", style="error")
+        sysexit(1)
+    return user_directory
 
 
 def download_mods(
