@@ -19,7 +19,7 @@ from rich.progress import (
 from rich.table import Table
 
 # builder for tool initialization, creating required appdata folders and stuff like that
-from mc_mods_downloader import builder, constants as const, config
+from mc_mods_downloader import builder, config, constants as const
 
 # overriding default print with rich print
 print = const.CONSOLE.print
@@ -107,13 +107,9 @@ def main_menu(
         current_config (config.Config): The config, which could be changed in the configure_settings().
         json_modlist_data (dict[str, list]): The mods.json loaded from the builder.py.
     Returns:
-        tuple: to wrap both of them into a sort of list
-
-        list[str]: the initial modlist which stores the mods slug
-        (needed for putting it through the modrinth api later in get_mods(),
-        it is not the final list used in download_mods(),
-
-        config.Config: the modpack_config
+        tuple[list[str], config.Config]:
+            - list[str]: The initial modlist used to store the slug of mods.
+            - config.Config: The new modpack config.
     """
     initial_modlist: list[str] = []
 
@@ -186,6 +182,12 @@ def _fetch_mod_data(
     download_context: DownloadContext,
     api_session: requests.Session | None = None,
 ) -> list[dict[str, Any]]:
+    """Fetches and returns mod data from the Modrinth API.
+
+    Raises:
+        ValueError: If no files are available for the game version
+        given in the configs.
+    """
     mod_loader: str = download_context.modpack_config.mod_loader
     version: str = download_context.modpack_config.version
 
@@ -209,7 +211,13 @@ def _fetch_mod_data(
 
 def _find_latest_mod_version(
     mod_api_data: list[dict[str, Any]], valid_version_types: list[str]
-):
+) -> dict[str, Any]:
+    """Finds the latest mod release from the mod_api_data that corresponds
+    with the valid_version_types.
+
+    Raises:
+        ValueError: If there are no valid releases.
+    """
     valid_mod_versions = [
         version
         for version in mod_api_data
@@ -222,6 +230,18 @@ def _find_latest_mod_version(
 
 
 def _find_latest_mod_file_data(latest_version: dict[str, Any]) -> tuple[str, str]:
+    """Finds and returns the mod file data (filename and url) from the
+    data from the latest version.
+
+    Raises:
+        ValueError: If the latest version has no files.
+        ValueError: If the target mod has no filename or URL.
+
+    Returns:
+        tuple[str, str]:
+            - str: The filename of the downloaded mod.
+            - str: The target URL.
+    """
     if not (files := latest_version.get("files")):
         raise ValueError("Target mod version contains no files.")
 
@@ -323,7 +343,7 @@ def get_mods(
     mod_data = {
         "slug": mod_slug,
         "filename": target_filename,
-        "url": target_url,
+        "url": target_url,  # requests does not support Path objects, therefore the url must be a string.
     }
     collected_mods.append(mod_data)
 
@@ -336,11 +356,8 @@ def get_mods(
 
 
 def clear_jar_files(directory_path: Path) -> None:
-    """clears .jar files in the mod directory where they download mods
-    this is to prevent duplicates and weird glitches and stuff and outdated mods
-
-    Args:
-        directory_path (str | Path): the directory path where the mods are installed
+    """Clears .jar files in the directory path. This is
+    to prevent mod duplicates when downloading mods
     """
     files = directory_path.glob("*.jar")
     for file in files:
@@ -351,16 +368,18 @@ def clear_jar_files(directory_path: Path) -> None:
 
 
 def _get_selected_launcher_path() -> tuple[Path, bool]:
-    """WARNING: THIS FUNCITON IS ONLY MEANT TO BE USED IN get_download_folder_path()!!!!!
+    """
+    NOTE: This function is a helper function for _get_download_folder_path()
 
-    basically this function sees which launcher the user has, makes the user select one
-    (unless only one potential launcher path is found)
+    Scans the system for known launcher directory structures on Windows.
+    If multiple launchers are found, prompts the user to select one or provide a
+    custom directory path. Non-Windows systems default immediately to manual input.
 
-    then based off the folder_path_search locations dict, find the folder path for the launcher
-    the user selected, and return it.
-    Returns: (things wrapped in the tuple)
-        Path: The launcher path selected by the user
-        bool: Whether the user created a manual path
+    Returns:
+        tuple[Path, bool]: A tuple containing:
+            - Path: The absolute path to the targeted launcher or custom directory.
+            - bool: True if the user provided a manual path, False if an automatic
+              path was successfully resolved.
     """
     # redefining APPDATA_FILEPATH for this func only
     if const.USER_OS == "win32":
@@ -390,7 +409,6 @@ def _get_selected_launcher_path() -> tuple[Path, bool]:
         if folderpath.exists()
     ]
 
-    # if any of the filepaths in folder_path_search_locations doesnt exist
     if not launcher_choices:
         return (
             enter_manual_path(
@@ -399,7 +417,6 @@ def _get_selected_launcher_path() -> tuple[Path, bool]:
             True,
         )
 
-    # make them choose the launcher/path they want
     if len(launcher_choices) > 1:
         launcher_choice = questionary.select(
             "Which launcher do you want to use to download the mods?",
@@ -419,12 +436,10 @@ def _get_selected_launcher_path() -> tuple[Path, bool]:
 
 def _get_modpack_folder(launcher_path: Path) -> Path:
     """NOTE: This function is a helper function for get_download_folder_path()
+    This gets and returns the selected modpack folder inside the launcher_path.
 
     Args:
         launcher_path (Path): launcher path given by the other helper function, _get_selected_launcher_path()
-
-    Returns:
-        Path: the selected modpack folderpath
     """
     directories = [folder.name for folder in launcher_path.iterdir() if folder.is_dir()]
 
@@ -447,16 +462,11 @@ def _get_modpack_folder(launcher_path: Path) -> Path:
 
 
 def get_download_folder_path(download_context: DownloadContext) -> Path:
-    """finds the folder path of the modpack by using two other helper functions,
-    _get_selected_launcher_path() and _get_modpack_folder(),
-    if user has default path in config.json, it uses that instead and skips the prompts
-
-    also asks the user a confirm prompt to confirm the folder path they selected, if so, return folder path
-    Returns:
-        str: folder path
     """
-    # checks if they already have a default path in their settings/config.json
-    if download_context.modpack_config.mods_directory is not None:  # if not empty
+    Gets the download folder destination of the selected mods.
+    Uses the default path in the configs instead if it exists.
+    """
+    if download_context.modpack_config.mods_directory is not None:
         return download_context.modpack_config.mods_directory
 
     while True:
@@ -465,7 +475,7 @@ def get_download_folder_path(download_context: DownloadContext) -> Path:
             modpack_folderpath = launcher_path
         else:
             modpack_folderpath = _get_modpack_folder(launcher_path)
-        # getting folder path for downloading
+
         if not modpack_folderpath:
             print(
                 "Folder path was empty so we are sending you right back to the selection prompts",
@@ -479,26 +489,16 @@ def get_download_folder_path(download_context: DownloadContext) -> Path:
             break
     return modpack_folderpath
 
-    # checking if there are any modpack folders inside
-
 
 def enter_manual_path(prompt: str) -> Path:
-    """this function forces the user to enter a manual path, this is usually only used in
-    get_download_folder_path()
+    """This function prompts the user to enter a manual path, usually used if the smart
+    directory finding system could not find one.
 
-    Args:
-        prompt (str): the prompt the user gets when asked to enter a path via questionary.path manually
-
-    Returns:
-        Path: The path object returned by this function
-
-    This function can also exit out of the program if the user cancels the manual filepath prompt,
-    as the program cannot function if there is no path given to download the mods.
+    This function also exits out of the program if no path is provided.
     """
-    # not really a warning but i think yellow fits here so
     print(
         "Tip: You can copy and paste the path from the file explorer search bar",
-        style="warning",
+        style="info",
     )
     while True:
         folder_path_str: str = questionary.path(
@@ -526,10 +526,9 @@ def download_mods(
     """
     Downloads mods in the modlist by fetching data from the mod's link. Also has progress bars.
     """
-
-    # clear files first before downloading or not
     modpack_folderpath: Path = get_download_folder_path(download_context)
     modpack_folderpath.mkdir(parents=True, exist_ok=True)
+
     should_clear_folders: bool = (
         download_context.modpack_config.behaviour_settings.auto_clear_jars
     )
@@ -543,8 +542,6 @@ def download_mods(
     if clear_folder:
         clear_jar_files(modpack_folderpath)
         print("Everything cleared.", style="success")
-
-    # actually downloading mods (with progress bar)
 
     # the making of the progress bar (this is for mods_downloaded/total mods)
     main_progress = Progress(
@@ -566,13 +563,13 @@ def download_mods(
     with Live(progress_group, refresh_per_second=10):
 
         def download_one_mod(target_mod) -> None:
-            """just so the threadpoolexecutor works well so the async nature works
-            basically it takes one mod from the full_modlist and downloads it"""
+            """Downloads the mod according to it's URL."""
             download_path = modpack_folderpath / target_mod.get("filename")
             if not (url := target_mod.get("url")):
                 print(f"{target_mod} has no url!")
                 return
 
+            # requests does not support Path objects, therefore the url must be a string.
             response = api_session.get(url, stream=True, timeout=const.API_TIMEOUT)
             response.raise_for_status()
 
@@ -627,7 +624,6 @@ def main() -> None:
     # getting the json files
     mods_json, id_slug_map, modpack_config = builder.main()
 
-    # now the program starts
     initial_modlist, new_modpack_config = main_menu(modpack_config, mods_json)
     download_context = DownloadContext(new_modpack_config, id_slug_map)
 

@@ -1,9 +1,11 @@
-import requests
-import questionary
 from copy import deepcopy
-from mc_mods_downloader import constants as const, storage
-from pathlib import Path
 from dataclasses import dataclass, asdict, fields
+from pathlib import Path
+
+import questionary
+import requests
+
+from mc_mods_downloader import constants as const, storage
 
 print = const.CONSOLE.print
 
@@ -24,6 +26,7 @@ class Config:
 
     @classmethod
     def load_configs(cls):
+        """Returns a config class according to the configs in config.json."""
         configs = storage.load_json(const.CONFIG_FILEPATH)
         return cls(
             configs["version"],
@@ -35,16 +38,8 @@ class Config:
 
     @classmethod
     def get_default_config(cls, api_session: requests.Session | None = None):
-        """it generates a default config for those who dont have a config.json yet,
-
-        params:
-        api_session: a requests.Session object which is used to optimize performance, if none is
-        given, use the regular requests.get() function
-
-        returns:
-        dict: the default_config returned, usually passed into save_config() to save it
-
-        uses modrinth api to get the latest minecraft version for the version property"""
+        """Gets and returns a config class with the defaults.
+        Uses the Modrinth API to get the latest major minecraft version."""
 
         api_url = "https://api.modrinth.com/v2/tag/game_version"
         requests_session = api_session or requests
@@ -52,6 +47,7 @@ class Config:
         data = requests_session.get(
             api_url, timeout=const.API_TIMEOUT, headers=headers
         ).json()
+
         # pretty much guaranteed to succeed unless bad internet or server crash, so no try except
         minecraft_versions = [
             version["version"]
@@ -77,67 +73,27 @@ class Config:
         storage.write_json(const.CONFIG_FILEPATH, configs)
 
 
-def get_default_config(api_session: requests.Session | None = None) -> Config:
-    """it generates a default config for those who dont have a config.json yet,
-
-    params:
-    api_session: a requests.Session object which is used to optimize performance, if none is
-    given, use the regular requests.get() function
-
-    returns:
-    dict: the default_config returned, usually passed into save_config() to save it
-
-    uses modrinth api to get the latest minecraft version for the version property"""
-
-    api_url = "https://api.modrinth.com/v2/tag/game_version"
-    requests_session = api_session or requests
-    headers = {"User-Agent": const.USER_AGENT} if not api_session else None
-    data = requests_session.get(
-        api_url, timeout=const.API_TIMEOUT, headers=headers
-    ).json()
-    # pretty much guaranteed to succeed unless bad internet or server crash, so no try except
-    minecraft_versions = [
-        version["version"] for version in data if version["version_type"] == "release"
-    ]
-    latest_minecraft_version = minecraft_versions[0]
-    return Config(
-        version=latest_minecraft_version,
-        mod_loader="fabric",
-        valid_versions=["release"],
-        mods_directory=None,
-        behaviour_settings=BehaviourConfig(False, False),
-    )
-
-
 def _change_minecraft_version(config: Config) -> str:
-    """uses modrinth api to find the current minecraft game versions, then
-    uses a questionary autocomplete prompt to see what the user wants
-
-    Returns:
-        str: the game version chosen by the user
-    """
     api_url: str = "https://api.modrinth.com/v2/tag/game_version"
     data = requests.get(
         api_url, timeout=const.API_TIMEOUT, headers={"User-Agent": const.USER_AGENT}
-    ).json()  # pretty much guaranteed to be 200
+    ).json()  # pretty much guaranteed to be 200, no try except needed
+
     minecraft_versions = [
         version["version"] for version in data if version["version_type"] == "release"
     ]
+
     print("Tip: Press Tab to enable autocomplete", style="warning")
     selected_version = questionary.autocomplete(
         "Type your minecraft version (e.g. 1.21): ",
         choices=minecraft_versions,
-        default=config.version,  # latest version
+        default=config.version,
     ).ask()
+
     return selected_version
 
 
 def _change_mod_loader(config: Config) -> str:
-    """uses questionary to find what mod loader the user wants to choose
-
-    Returns:
-        str: the mod loader chosen by the user
-    """
     print("Note that all Quilt users can use Fabric mods.", style="info")
     selected_mod_loader = questionary.select(
         "Choose your mod loader:",
@@ -149,11 +105,6 @@ def _change_mod_loader(config: Config) -> str:
 
 
 def _select_valid_versions(config: Config) -> list[str]:
-    """select which versions of mods are allowed (alpha, beta, release/stable)
-
-    Returns:
-        list[str]: selected versions
-    """
     selected_valid_versions = questionary.checkbox(
         "Which mod versions do you allow?",
         choices=(
@@ -180,13 +131,6 @@ def _select_valid_versions(config: Config) -> list[str]:
 
 
 def _change_default_path(config: Config) -> Path:
-    """change the default path for the modpack download path, changing this will
-    remove the prompts to ask for your path during the downloading so it better
-    be correct
-
-    Returns:
-        str: the selected folder path by the user
-    """
     print(
         "Note that changing this setting will remove the pathing prompt when downloading",
         style="warning",
@@ -204,9 +148,6 @@ def _change_default_path(config: Config) -> Path:
 
 
 def _change_behaviour_settings(config: Config) -> None:
-    """behaviour settings are basically just the true/false value settings
-    returns None as the changes happen inside this function directly
-    """
     behaviour_config_names: list[str] = [
         field.name for field in fields(config.behaviour_settings)
     ]
@@ -236,7 +177,7 @@ def _change_behaviour_settings(config: Config) -> None:
 
 
 def main_settings_loop(original_config: Config) -> Config:
-    """the main menu, where the user selects a thing to change"""
+    """The main setting configuration menu."""
     new_config: Config = deepcopy(original_config)
 
     while True:
@@ -268,7 +209,7 @@ def main_settings_loop(original_config: Config) -> Config:
             case "Behaviour Settings":
                 _change_behaviour_settings(new_config)  # this one changes it directly
             case "Reset Settings to Default":
-                new_config = get_default_config()
+                new_config = Config.get_default_config()
             case "Exit and Save":
                 new_config.save_configs()
                 return new_config

@@ -3,25 +3,22 @@ from typing import Any
 
 import requests
 
-from mc_mods_downloader import constants as const, config, storage
+from mc_mods_downloader import config, constants as const, storage
 
-# global constants
 print = const.CONSOLE.print
-
-# MAIN_DATA_FILEPATH is where program stores json files
 
 
 def get_mods_json(api_session: requests.Session) -> bool:
-    """grabs the mods.json from my github repo, and puts it in mods.json (locally on appdata/roaming)
-    also uses mods.etag to check if it is already up to date, removing the need to actually like save it
-    every time the app launches
+    """Synchronizes the local mods.json with the remote GitHub repository.
 
     Raises:
-        requests.exceptions.HTTPError: If response.status_code is not 200 (success) or 304 (mods.json using latest version),
-        this is either a server error (github issues) or a cilent error (internet issues)
+        requests.exceptions.HTTPError: If server responds with a status code
+        other than 200 or 304.
 
     Returns:
-        bool: it determines whether the slugsidmap.json gets should updated or not (aka if slugidmap() gets called or not)
+        bool: True if a fresh file was downloaded and written to disk, signaling
+        that downstream cache maps (like slug-to-ID mappings) must be rebuilt.
+        False if the local file is already up to date.
     """
     etag_filepath = const.MAIN_DATA_FILEPATH / "mods.etag"
     mods_url = "https://raw.githubusercontent.com/nerrader/nerraders-mc-mod-downloader/refs/heads/main/data/mods.json"
@@ -44,7 +41,7 @@ def get_mods_json(api_session: requests.Session) -> bool:
     return True
 
 
-def get_slugslist() -> list[str]:  # only slugs, no ids
+def get_slugslist() -> list[str]:
     """Summary:
     Gets the list of slugs (value) from the mods.json
 
@@ -52,27 +49,21 @@ def get_slugslist() -> list[str]:  # only slugs, no ids
         list[str]: The list of slugs
     """
     slugslist: list[str] = []
-    modslist = storage.load_json(const.MODS_FILEPATH)
-    for category, category_mods in modslist.items():
-        if category == "library_mods":
-            for mod in category_mods:
-                slugslist.append(mod)
-        else:
-            for mod in category_mods:
-                slugslist.append(mod.get("value", mod))
+    modslist: dict[str, Any] = storage.load_json(const.MODS_FILEPATH)
+
+    for category_mods in modslist.values():
+        slugslist.extend(
+            [mod["value"] if isinstance(mod, dict) else mod for mod in category_mods]
+        )
     return slugslist
 
 
 def modify_slugsmap(slugslist: list[str], api_session: requests.Session) -> None:
-    """Summary:
+    """
     From the list of slugs given, use the modrinth API to find the IDs for each slug,
-    then put it in a dictionary (id: slug), then saves it to a file called id_slug_map.json (locally in appdata)
+    then put it in a dictionary (id: slug), then saves it to idslugmap.json
 
-    id_slug_map.json will be used to convert slugs into ids and vice versa in main.py
-
-    Args:
-        slugslist (list[str]): The list of slugs that will be needed to find the IDs of each, usually from
-        getslugslist()
+    idslugmap.json will be used to convert slugs into ids and vice versa in main.py
     """
     id_slug_map: dict = {}
     API_URL = "https://api.modrinth.com/v2/projects"
@@ -87,7 +78,7 @@ def modify_slugsmap(slugslist: list[str], api_session: requests.Session) -> None
 
 
 def get_slugsidmap(api_session: requests.Session) -> None:
-    """combines two functions, to make a single function which handles the entire slugidmap creation"""
+    """Combines two functions to make a single function which handles the entire slugidmap.json creation"""
     modify_slugsmap(get_slugslist(), api_session)
 
 
@@ -108,7 +99,7 @@ def checkup_files(api_session: requests.Session) -> None:
         #     json.load(file)  # will raise an error if empty, and also if doesnt exist
     except (json.decoder.JSONDecodeError, FileNotFoundError):
         print("Could not load config.json, setting to defaults")
-        config.get_default_config(api_session).save_configs()
+        config.Config.get_default_config(api_session).save_configs()
 
     # idslugmap.json checkup, should update or not
     try:
@@ -131,7 +122,6 @@ def checkup_files(api_session: requests.Session) -> None:
 
 def main() -> tuple[dict[str, Any], dict[str, Any], config.Config]:
     const.MAIN_DATA_FILEPATH.mkdir(parents=True, exist_ok=True)
-    # checks if config.json is real
     with requests.Session() as session:
         session.headers.update({"User-Agent": const.USER_AGENT})
         while True:
@@ -145,7 +135,7 @@ def main() -> tuple[dict[str, Any], dict[str, Any], config.Config]:
                 return (mods, idslugmap, configs)
             except Exception as error:
                 print(f"Something happened: {error}, resetting files to defaults")
-                config.get_default_config().save_configs()
+                config.Config.get_default_config().save_configs()
                 get_mods_json(session)
                 get_slugsidmap(session)
 
