@@ -10,6 +10,7 @@ readme = "README.md"
 # found using vermin package
 requires-python = ">=3.10"
 dependencies = [
+    "loguru>=0.7.3",
     "platformdirs>=4.9.4",
     "questionary>=2.1.1",
     "requests>=2.33.0",

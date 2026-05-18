@@ -1,9 +1,10 @@
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
-from sys import exit as sysexit
+from sys import exit as sysexit, stderr
 from typing import Any
 
+from loguru import logger
 import questionary
 import requests
 from rich.console import Group
@@ -27,7 +28,7 @@ print = const.CONSOLE.print
 
 @dataclass
 class DownloadContext:
-    modpack_config: config.Config
+    config: config.Config
     id_slug_map: dict[str, str]
     visited_mod_ids: set[str] = field(default_factory=set, repr=False)
     full_modlist: list[dict[str, str]] = field(default_factory=list)
@@ -76,14 +77,18 @@ def main_menu(
 
         match category_map_value:
             case "exit and save":
+                logger.debug("User chose to exit and save to start downloading.")
                 return (initial_modlist, current_config)
             case "settings":
+                logger.debug("User chose to configure settings, opening settings menu.")
                 current_config = config.main_settings_loop(current_config)
                 continue
             case "clear":
+                logger.debug("User chose to clear the modlist.")
                 initial_modlist = []
                 continue
             case "cancel":
+                logger.debug("User chose to cancel, exiting program.")
                 sysexit(0)
 
         mods_in_category: list[dict[str, str]] = json_modlist_data[category_map_value]
@@ -105,6 +110,10 @@ def main_menu(
             choices=mod_choices,
             style=const.QUESTIONARY_STYLE,
         ).ask()
+
+        logger.debug(
+            f"user chose these mods: {selection} from category: {category_choice}"
+        )
 
         # for every mod in everything the user has selected so far,
         # remove every mod that is in the category that the user is in
@@ -141,12 +150,17 @@ def resolve_dependencies(
     dependencies = [
         dep
         for dep in latest_version.get("dependencies", [])
-        if dep.get("dependency_type") == "required"
+        if dep["dependency_type"] == "required"
     ]
 
     for dependency in dependencies:
+        logger.debug(
+            f"Resolving dependency with data: {dependency.get('file_name', 'Unknown')}"
+        )
         if not (dependency_project_id := dependency.get("project_id")):
-            continue
+            raise ValueError(
+                f"Dependency {dependency.get('file_name', 'Unknown')} has no project ID!"
+            )
         # Threading lock check is handled safely inside the next get_mods recursive call
         try:
             new_dependencies = get_mods(
@@ -159,12 +173,15 @@ def resolve_dependencies(
                 download_context.dependency_mods_counter += 1
 
         except Exception as error:
+            logger.error(f"Error occurred while resolving dependency: {repr(error)}")
             print(
                 f"\nHey, you should probably download this dependency yourself cuz the script couldnt do it: {repr(error)} ERROR",
                 style="warning",
             )
             print(
-                f"Link: https://modrinth.com/mod/{dependency_project_id}",
+                f"Link: https://modrinth.com/mod/{dependency_project_id}"
+                if dependency_project_id
+                else "No link available",
                 style="warning",
             )
 
@@ -186,9 +203,11 @@ def get_mods(
             return []
         download_context.visited_mod_ids.add(mod_id)
 
+    logger.debug(f"Getting info for mod {mod_slug} ({mod_id})")
+
     try:
-        mod_loader = download_context.modpack_config.mod_loader
-        version = download_context.modpack_config.version
+        mod_loader = download_context.config.mod_loader
+        version = download_context.config.version
 
         api_url = f"https://api.modrinth.com/v2/project/{mod_id}/version"
         api_params = {
@@ -207,14 +226,16 @@ def get_mods(
         data = response.json()
 
         if not data:
+            logger.error(f"No files available for {version}")
             raise ValueError(f"No files available for {version}")
 
-        valid_versions = download_context.modpack_config.valid_versions
+        valid_versions = download_context.config.valid_versions
         valid_mod_versions = [
             version for version in data if version.get("version_type") in valid_versions
         ]
 
         if not valid_mod_versions:
+            logger.error(f"Mod does not have any {valid_versions} releases.")
             raise ValueError(f"Mod does not have any {valid_versions} releases.")
         latest_version = valid_mod_versions[0]
 
@@ -226,6 +247,9 @@ def get_mods(
         target_url = target_file["url"]
 
         if not target_filename or not target_url:
+            logger.error(
+                f"Target mod {mod_slug} ({mod_id}) has no filename or download URL, cannot be downloaded."
+            )
             raise ValueError("Target mod has no filename or download URL")
 
     except requests.HTTPError as error:
@@ -254,12 +278,14 @@ def clear_jar_files(directory_path: Path) -> None:
     """Clears .jar files in the directory path. This is
     to prevent mod duplicates when downloading mods
     """
+    logger.info("Clearing all .jar files in the mods folder.")
     files = directory_path.glob("*.jar")
     for file in files:
         try:
             file.unlink()
         except Exception as error:
             print(f"Could not remove {file}: {error}", style="error")
+            logger.error(f"Could not remove {file}: {repr(error)}")
 
 
 def _get_selected_launcher_path() -> Path | None:
@@ -274,6 +300,7 @@ def _get_selected_launcher_path() -> Path | None:
         Path | None: Path if a launcher directory is found or provided
         None if the user is forced to provide a manual path.
     """
+    logger.debug("Attempting to find launcher paths on the system.")
     if const.USER_OS == "win32":
         folderpath_search_locations = {
             "Minecraft Launcher": const.APPDATA_FILEPATH / ".minecraft" / "modpacks",
@@ -298,6 +325,9 @@ def _get_selected_launcher_path() -> Path | None:
     ]
 
     if not launcher_choices:
+        logger.debug(
+            "No launcher paths found on the system, defaulting to manual path input."
+        )
         return None
 
     if len(launcher_choices) > 1:
@@ -324,6 +354,9 @@ def _get_modpack_folder(launcher_path: Path) -> Path:
     directories = [folder.name for folder in launcher_path.iterdir() if folder.is_dir()]
 
     if not directories:
+        logger.debug(
+            "No directories found in the launcher path, defaulting to creating a new modpack folder."
+        )
         modpack_name = questionary.text(
             "What should the name of the new modpack be?",
             style=const.QUESTIONARY_STYLE,
@@ -354,12 +387,12 @@ def get_download_folder_path(download_context: DownloadContext) -> Path:
     Gets the download folder destination of the selected mods.
     Uses the default path in the configs instead if it exists.
     """
-    if download_context.modpack_config.mods_directory is not None:
-        return download_context.modpack_config.mods_directory
+    logger.info("Attempting to get download folder path.")
+    if download_context.config.mods_directory is not None:
+        return download_context.config.mods_directory
 
     while True:
-        launcher_path = _get_selected_launcher_path()
-        if launcher_path is None:
+        if (launcher_path := _get_selected_launcher_path()) is None:
             return enter_manual_path()
         return _get_modpack_folder(launcher_path)
 
@@ -372,6 +405,7 @@ def enter_manual_path(
 
     This function also exits out of the program if no path is provided.
     """
+    logger.info("Prompting user to enter a manual path for mod downloads.")
     user_directory = prompt_user_for_directory(prompt=prompt)
     if not user_directory:
         print("No path provided, exiting program.", style="error")
@@ -393,14 +427,19 @@ def download_mods(
             f"Is ({modpack_folderpath}) the correct filepath?",
             style=const.QUESTIONARY_STYLE,
         ).ask()
+
         if confirm_folderpath:
+            logger.info("User confirmed the folder path, proceeding with downloads.")
             break
+
+        logger.info("User denied the folder path, prompting again.")
         print("Alright, let's try that again then.", style="info")
-        download_context.modpack_config.mods_directory = None
+        download_context.config.mods_directory = None
+
     modpack_folderpath.mkdir(parents=True, exist_ok=True)
 
     should_clear_folders: bool = (
-        download_context.modpack_config.behaviour_settings.auto_clear_jars
+        download_context.config.behaviour_settings.auto_clear_jars
     )
     clear_folder = (
         questionary.confirm(
@@ -435,6 +474,9 @@ def download_mods(
 
         def download_one_mod(target_mod: dict[str, str]) -> None:
             """Downloads the mod according to it's URL."""
+            logger.info(
+                f"Downloading target_mod with slug: {target_mod.get('slug', 'Unknown')}",
+            )
             try:
                 download_path = modpack_folderpath / target_mod["filename"]
                 if not (url := target_mod.get("url")):
@@ -445,12 +487,19 @@ def download_mods(
                     url,
                     stream=True,
                     timeout=const.API_TIMEOUT,
-                    headers={"User-Agent": const.USER_AGENT},
                 )
                 response.raise_for_status()
 
-                mod_filesize = int(response.headers.get("Content-Length", 0))
+                header_content_type = response.headers.get("Content-Type", "")
+                if (
+                    header_content_type not in "application/octet-stream"
+                    and header_content_type not in "application/java-archive"
+                ):
+                    raise ValueError(
+                        f"Unexpected content type for mod {target_mod.get('slug', 'Unknown')}: {header_content_type}"
+                    )
 
+                mod_filesize = int(response.headers.get("Content-Length", 0))
                 with const.THREADING_LOCK:
                     mod_downloading_progress_id = mod_download_progress.add_task(
                         f"downloading {target_mod.get('slug')}",
@@ -461,15 +510,23 @@ def download_mods(
                 with open(download_path, "wb") as file:
                     for chunk in response.iter_content(chunk_size=const.CHUNK_SIZE):
                         file.write(chunk)
-                        mod_download_progress.update(
-                            mod_downloading_progress_id, advance=len(chunk)
-                        )
+                        with const.THREADING_LOCK:
+                            mod_download_progress.update(
+                                mod_downloading_progress_id, advance=len(chunk)
+                            )
 
                 # updating the progress bars and removing the mod progress bar (mod finished downloading)
                 with const.THREADING_LOCK:
                     main_progress.update(mods_downloaded, advance=1)
                     mod_download_progress.remove_task(mod_downloading_progress_id)
+
+                    logger.success(
+                        f"Finished downloading mod {target_mod.get('slug', 'Unknown')}, updated progress bars accordingly."
+                    )
             except requests.HTTPError as error:
+                logger.error(
+                    f"HTTP error occurred while downloading mod {target_mod.get('slug', 'Unknown')}: {repr(error)}"
+                )
                 code = (
                     error.response.status_code
                     if error.response is not None
@@ -482,6 +539,9 @@ def download_mods(
                     }
                 )
             except ValueError as error:
+                logger.error(
+                    f"Error occurred while downloading mod {target_mod.get('slug', 'Unknown')}: {repr(error)}"
+                )
                 download_context.failed_mods.append(
                     {"slug": target_mod.get("slug", "Unknown"), "cause": str(error)}
                 )
@@ -518,12 +578,28 @@ def get_download_summary(download_context: DownloadContext) -> None:
         print("")
 
 
+def setup_logger(config: config.Config) -> None:
+    logger.remove()
+    logger.add(
+        const.MAIN_DATA_FILEPATH / "app.log",
+        level="DEBUG",
+        rotation="00:00",
+        retention=1,
+    )
+    if config.behaviour_settings.verbose_mode:
+        logger.add(stderr, level="DEBUG")
+        logger.debug("Verbose mode enabled, now logging to console.")
+
+
 def main() -> None:
     # getting the json files
-    mods_json, id_slug_map, modpack_config = builder.main()
+    configs = config.Config.get_or_create_config()
+    setup_logger(configs)
+    mods_json, id_slug_map = builder.main()
+    logger.debug("Finished loading JSON data from builder.")
 
-    initial_modlist, new_modpack_config = main_menu(modpack_config, mods_json)
-    download_context = DownloadContext(new_modpack_config, id_slug_map)
+    initial_modlist, new_config = main_menu(configs, mods_json)
+    download_context = DownloadContext(new_config, id_slug_map)
 
     # session so the tcp connection doesnt reset
     with requests.Session() as api_session:
