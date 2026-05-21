@@ -1,4 +1,4 @@
-# Minecraft Mods Downloader
+# Minecraft Mods Downloader (MCDL)
 
 I made this tool to significantly speed up and automate the usually tedious process of manually searching up and downloading minecraft mods.
 
@@ -61,7 +61,7 @@ I've always spent one to two hours just searching up and downloading those mods 
 The only part where it might be slightly confusing is the part where you need to select the mods themselves, as the rest of the tool is automated.
 
 > [!NOTE]
-> This tool creates a directory in AppData/Roaming/mc-mods-downloader to store, and sometimes modfiy needed .json files for it to function.
+> This tool creates a directory in AppData/Roaming/mcdl to store, and sometimes modfiy needed .json files for it to function.
 
 - **Arrow Keys** to move up and down the list.
 - Then, you can choose a category to browse mods by.
