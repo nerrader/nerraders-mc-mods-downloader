@@ -6,8 +6,8 @@ from loguru import logger
 import questionary
 import requests
 
-from mc_mods_downloader import constants as const, storage
-from mc_mods_downloader.utils.prompt_user_for_directory import prompt_user_for_directory
+from mcdl import constants as const, storage
+from mcdl.utils.prompt_user_for_directory import prompt_user_for_directory
 
 print = const.CONSOLE.print
 

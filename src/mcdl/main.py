@@ -19,8 +19,8 @@ from rich.progress import (
 )
 from rich.table import Table
 
-from mc_mods_downloader import builder, config, constants as const
-from mc_mods_downloader.utils.prompt_user_for_directory import prompt_user_for_directory
+from mcdl import builder, config, constants as const
+from mcdl.utils.prompt_user_for_directory import prompt_user_for_directory
 
 # overriding default print with rich print
 print = const.CONSOLE.print

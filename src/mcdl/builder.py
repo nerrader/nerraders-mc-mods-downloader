@@ -4,7 +4,7 @@ from typing import Any
 from loguru import logger
 import requests
 
-from mc_mods_downloader import constants as const, storage
+from mcdl import constants as const, storage
 
 print = const.CONSOLE.print
 
