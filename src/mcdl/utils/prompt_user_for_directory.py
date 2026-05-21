@@ -2,7 +2,7 @@ from pathlib import Path
 from tkinter import filedialog
 import tkinter as tk
 
-from mc_mods_downloader import constants as const
+from mcdl import constants as const
 
 
 def prompt_user_for_directory(

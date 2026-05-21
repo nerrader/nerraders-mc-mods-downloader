@@ -351,7 +351,7 @@ wheels = [
 ]
 
 [[package]]
-name = "mc-mods-downloader"
+name = "mcdl"
 version = "1.0.0"
 source = { editable = "." }
 dependencies = [
