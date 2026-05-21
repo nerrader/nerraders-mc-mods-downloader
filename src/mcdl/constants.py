@@ -15,7 +15,7 @@ CONSOLE = Console(theme=CUSTOM_THEME, highlight=False)
 
 # APPDATA_FILEPATH is where program stores json files
 # filepaths
-_dirs = PlatformDirs("mc-mods-downloader", appauthor="nerrader")
+_dirs = PlatformDirs("mcdl", appauthor="nerrader")
 
 MAIN_DATA_FILEPATH: Path = _dirs.user_data_path
 MODS_FILEPATH: Path = MAIN_DATA_FILEPATH / "mods.json"
@@ -37,7 +37,7 @@ CHUNK_SIZE = 16384
 
 # for every api request
 API_TIMEOUT = 10
-USER_AGENT = "https://github.com/nerrader/nerraders-mc-mod-downloader"
+USER_AGENT = "https://github.com/nerrader/mcdl"
 
 QUESTIONARY_STYLE = Style(
     [
