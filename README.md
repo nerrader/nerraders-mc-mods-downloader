@@ -1,4 +1,4 @@
-# Minecraft Mods Downloader
+# Minecraft Mods Downloader (MCDL)
 
 I made this tool to significantly speed up and automate the usually tedious process of manually searching up and downloading minecraft mods.
 
