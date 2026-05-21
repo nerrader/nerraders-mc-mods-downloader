@@ -1,3 +1,6 @@
+# v3.3.1 - 21-5-2026
+* Changed the name from `minecraft-mods-downloader` to `MCDL`.
+* Changed the filepaths in constants.py and import statements to match with the new name.
 # v3.3.0 - 19-5-2026
 * Added logging and made `verbose_mode` (originally `show_detailed_logs`) configuration functional.
 * Added a style for the questionary menus to increase contrast for important elements.
