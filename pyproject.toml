@@ -3,7 +3,7 @@ requires = ["hatchling>=1.26"]
 build-backend = "hatchling.build"
 
 [project]
-name = "mc_mods_downloader"
+name = "mcdl"
 version = "1.0.0" # im not maintaining the version number manually, this is just a placeholder
 description = "A tool to help you download minecraft mods quickly and easily"
 readme = "README.md"
@@ -34,4 +34,4 @@ dev = [
 ]
 
 [project.scripts]
-mcdl = "mc_mods_downloader.main:main"
+mcdl = "mcdl.main:main"
