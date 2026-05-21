@@ -42,14 +42,16 @@ I've always spent one to two hours just searching up and downloading those mods 
 1. **Download** the latest .zip folder from the latest [Release](https://github.com/nerrader/nerraders-mc-mod-downloader/releases)
 2. **Extract** the **.zip folder**
 3. Run the .exe file inside that folder
-    > [!important]
-    > If Windows flags the .exe as unrecognized, click on **More Info > Run Anyway**
-    >
-    > This happens because this tool is new and does not have a paid Certificate. That would cost me $200/year to sign.
-    >
-    > Here's a [VirusTotal scan](https://www.virustotal.com/gui/file/0715d68d44ee76ea12aa96c12561cefab7cdd1c2049f4a718f36cdd5ea1fa974?nocache=1) I did on my own .exe as of v3.1.1
-    >
-    > If you are still curious or still skeptical of the safety of the .exe, feel free to run your own VirusTotal scan, or just check the source code that is available right here on GitHub. Everything's open source.
+
+> [!important]
+> If Windows flags the .exe as unrecognized, click on **More Info > Run Anyway**
+>
+> This happens because this tool is new and does not have a paid Certificate. That would cost me $200/year to sign.
+>
+> Here's a [VirusTotal scan](https://www.virustotal.com/gui/file/f2437c65effc8b0814f086844db2869d9967ce09a30ddf6559b3f5d5083036b9) I did on my own .exe as of v3.3.0
+>
+> If you are still curious or still skeptical of the safety of the .exe, feel free to run your own VirusTotal scan, or just check the source code that is available right here on GitHub. Everything's open source.
+
 4. You're done!
 
 # How to Use
