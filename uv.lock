@@ -352,6 +352,7 @@ wheels = [
 
 [[package]]
 name = "mc-mods-downloader"
+version = "1.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "loguru" },

@@ -13,7 +13,7 @@ def load_json(filepath: Path) -> Any:
         return json.load(file)
 
 
-def write_json(filepath: Path, data: Any) -> None:
+def write_json(filepath: Path | str, data: Any) -> None:
     logger.debug(f"Writing json data to file: {filepath}")
     with open(filepath, "w", encoding="utf-8") as file:
         json.dump(data, file, indent=4, ensure_ascii=False)
